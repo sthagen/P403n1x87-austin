@@ -130,3 +130,11 @@ venv.bak/
 
 # Source archive packed by `snapcraft cleanbuild` before pushing to the LXD container
 /*_source.tar.bz2
+
+
+# -----------------------------------------------------------------------------
+# --  SNAP SOURCES
+# -----------------------------------------------------------------------------
+
+*.wix*
+*.msi
