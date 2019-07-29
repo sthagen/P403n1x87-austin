@@ -2,7 +2,7 @@
 
 test_case() {
   run bats test/test_$1.bats
-  echo $output
+  echo "$output"
   [ $status = 0 ]
 }
 
@@ -11,6 +11,9 @@ test_case() {
 }
 
 @test "Test Austin: attach" {
+  if [[ $EUID -ne 0 ]]; then
+   skip "requires root"
+  fi
   test_case attach
 }
 
