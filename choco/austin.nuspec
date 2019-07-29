@@ -7,7 +7,7 @@
 <package xmlns="http://schemas.microsoft.com/packaging/2015/06/nuspec.xsd">
   <metadata>
     <id>austin</id>
-    <version>0.6.1-beta</version>
+    <version>0.7.0</version>
     <packageSourceUrl>https://github.com/P403n1x87/austin</packageSourceUrl>
     <owners>Gabriele N. Tornetta</owners>
 

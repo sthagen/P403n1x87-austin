@@ -2,7 +2,7 @@ $ErrorActionPreference = 'Stop';
 $toolsDir   = "$(Split-Path -parent $MyInvocation.MyCommand.Definition)"
 
 $url        = ''
-$url64      = 'https://github.com/P403n1x87/austin/releases/download/v0.6.1-beta/austin-0.6.1-beta-win64.msi'
+$url64      = 'https://github.com/P403n1x87/austin/releases/download/v0.7.0/austin-0.7.0-win64.msi'
 
 $packageArgs = @{
   packageName   = $env:ChocolateyPackageName

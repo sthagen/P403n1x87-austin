@@ -1,7 +1,7 @@
 <?xml version='1.0' encoding='windows-1252'?>
 <Wix xmlns='http://schemas.microsoft.com/wix/2006/wi'>
   <Product
-    Name='Austin 0.6.1-beta'
+    Name='Austin 0.7.0'
     Manufacturer='Gabriele N. Tornetta'
 
     Id='2c5be9da-e66c-4eec-a8ea-facaedaa17e3'
@@ -9,13 +9,13 @@
 
     Language='1033'
     Codepage='1252'
-    Version='0.6.1'>
+    Version='0.7.0'>
 
     <Package Id='*'
       Keywords='Installer'
       Platform="x64"
 
-      Description="Austin 0.6.1-beta Installer"
+      Description="Austin 0.7.0 Installer"
       Comments='Austin is an open source frame stack sampler for CPython'
       Manufacturer='Gabriele N. Tornetta'
 
@@ -74,7 +74,7 @@
 
     <Feature Id='Complete'
       Level='1'
-      Title='Austin 0.6.1-beta'
+      Title='Austin 0.7.0'
       ConfigurableDirectory='INSTALLDIR'>
       <ComponentRef Id='MainExecutable' />
     </Feature>
