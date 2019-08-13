@@ -8,14 +8,11 @@ $packageArgs = @{
   packageName   = $env:ChocolateyPackageName
   unzipLocation = $toolsDir
   fileType      = 'MSI'
-  url           = $url
   url64bit      = $url64
 
   softwareName  = 'austin*'
 
-  checksum      = ''
-  checksumType  = 'sha256'
-  checksum64    = ''
+  checksum64    = 'B77CF5DD75F288CB2DDB21455D8944BBF9A65E40B7877CA2242D5232A190E402'
   checksumType64= 'sha256'
 
   silentArgs    = "/qn /norestart /l*v `"$($env:TEMP)\$($packageName).$($env:chocolateyPackageVersion).MsiInstall.log`""
