@@ -8,13 +8,13 @@
   <metadata>
     <id>austin</id>
     <version>0.7.0</version>
-    <packageSourceUrl>https://github.com/P403n1x87/austin</packageSourceUrl>
+    <packageSourceUrl>https://github.com/P403n1x87/austin/tree/release/choco/choco</packageSourceUrl>
     <owners>Gabriele N. Tornetta</owners>
 
     <title>Austin (Install)</title>
     <authors>Gabriele N. Tornetta</authors>
     <projectUrl>https://github.com/P403n1x87/austin</projectUrl>
-    <iconUrl>https://github.com/P403n1x87/austin/raw/master/art/austin_logo.png</iconUrl>
+    <iconUrl>https://rawcdn.githack.com/P403n1x87/austin/8bea939fc7088a7ed1d2012d819890eecd8753c4/art/austin_logo.png</iconUrl>
     <copyright>2018 Gabriele N. Tornetta</copyright>
     <licenseUrl>https://github.com/P403n1x87/austin/raw/master/LICENSE.md</licenseUrl>
     <requireLicenseAcceptance>true</requireLicenseAcceptance>
