@@ -68,7 +68,9 @@ script:
   then
 
     gcc -s -Wall -O3 -o src/austin src/*.c -lpsapi;
-    export PATH=/c/Python37:$PATH;
+    
+    export PATH=/c/Python37:$HOME/bin:$PATH;
+    echo PATH=$PATH;
     bats test/test.bats;
 
   fi
