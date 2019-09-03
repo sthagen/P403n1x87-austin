@@ -37,15 +37,24 @@ before_script:
     sudo add-apt-repository ppa:duggan/bats -y;
 
     sudo apt install bats valgrind python2.{3..7} python3.{3..7} -y;
+
+    autoreconf --install;
+
+  elif [[ "$TRAVIS_OS_NAME" == "windows" ]];
+  then
+    git clone --depth=1 https://github.com/bats-core/bats-core.git;
+    cd bats-core
+    ./install.sh $HOME
+
+    choco install python --version 3.7.4
   fi
 
-  if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then autoreconf --install; fi
 
 script:
   - echo $TRAVIS_OS_NAME -- $TARGET
   - if [[ "$TRAVIS_OS_NAME" == "linux"   ]]; then ./configure && make && sudo make check;         fi
   - if [[ "$TRAVIS_OS_NAME" == "osx"     ]]; then gcc -s -Wall -O3 -o src/austin src/*.c;         fi
-  - if [[ "$TRAVIS_OS_NAME" == "windows" ]]; then gcc -s -Wall -O3 -o src/austin src/*.c -lpsapi; fi
+  - if [[ "$TRAVIS_OS_NAME" == "windows" ]]; then gcc -s -Wall -O3 -o src/austin src/*.c -lpsapi; export PATH=/c/Python37:$PATH; bats test/test.bats; fi
 
 after_success:
   ./src/austin --usage
