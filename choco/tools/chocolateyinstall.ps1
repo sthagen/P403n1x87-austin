@@ -1,7 +1,7 @@
 $ErrorActionPreference = 'Stop';
 $toolsDir   = "$(Split-Path -parent $MyInvocation.MyCommand.Definition)"
 
-$url64      = 'https://github.com/P403n1x87/austin/releases/download/v1.0.0/austin-1.0.0-win64.msi'
+$url64      = 'https://github.com/P403n1x87/austin/releases/download/v1.0.1/austin-1.0.1-win64.msi'
 
 $packageArgs = @{
   packageName   = $env:ChocolateyPackageName
@@ -11,7 +11,7 @@ $packageArgs = @{
 
   softwareName  = 'austin*'
 
-  checksum64    = '77C07C26024EC6DFFAE4E90D3C9C8FB4E03DD740A1EFCF07CAF0030BBAD89361'
+  checksum64    = '74864412DF9A44760B9CEBDF4D00706FA8795FA3E5F3DD290AF041C37922A50D'
   checksumType64= 'sha256'
 
   silentArgs    = "/qn /norestart /l*v `"$($env:TEMP)\$($packageName).$($env:chocolateyPackageVersion).MsiInstall.log`""
