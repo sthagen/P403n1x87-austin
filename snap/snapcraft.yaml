@@ -1,4 +1,5 @@
 name: austin
+base: core20
 version: '3.3.0+git'
 summary: A Python frame stack sampler for CPython
 description: |
