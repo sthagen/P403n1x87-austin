@@ -22,9 +22,10 @@ parts:
     source: git://github.com/P403n1x87/austin
     source-depth: 1
     build-packages: [libunwind-dev, binutils-dev, libiberty-dev]
+    stage-packages: [libbinutils]
 
 apps:
   austin:
-    command: bin/austin
+    command: usr/local/bin/austin
   austinp:
-    command: bin/austinp
+    command: usr/local/bin/austinp
