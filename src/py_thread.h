@@ -26,6 +26,7 @@
 #include <stdint.h>
 #include <sys/types.h>
 
+#include "cache.h"
 #include "mem.h"
 #include "py_proc.h"
 #include "stats.h"
@@ -33,6 +34,15 @@
 
 #define MAXLEN                      1024
 #define MAX_STACK_SIZE              2048
+#ifdef NATIVE
+// In native mode we have both the Python and native stacks (the kernel stack
+// is negligible). We make sure we have a cache large enough to hold the full.
+// stack.
+#define MAX_FRAME_CACHE_SIZE        (MAX_STACK_SIZE << 1)
+#else
+#define MAX_FRAME_CACHE_SIZE        MAX_STACK_SIZE
+#endif
+#define MAX_STRING_CACHE_SIZE       LRU_CACHE_EXPAND
 
 
 typedef struct thread {
@@ -47,6 +57,10 @@ typedef struct thread {
   void          * top_frame;
 
   int             invalid;
+
+  /* The per-thread datastack was introduced in Python 3.11 */
+  void           * stack;
+  size_t           stack_size;
 } py_thread_t;
 
 
@@ -80,7 +94,7 @@ py_thread__next(py_thread_t *);
  * @param  ssize_t      the memory delta.
  */
 void
-py_thread__print_collapsed_stack(py_thread_t *, ctime_t, ssize_t);
+py_thread__emit_collapsed_stack(py_thread_t *, ctime_t, ssize_t);
 
 
 /**

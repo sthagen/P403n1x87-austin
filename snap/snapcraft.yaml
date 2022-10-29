@@ -1,6 +1,11 @@
 name: austin
 base: core20
-version: '3.3.0+git'
+# [[[cog
+# from scripts.utils import get_current_version_from_changelog as version
+# print(f"version: '{version()}+git'")
+# ]]]
+version: '3.4.1+git'
+# [[[end]]]
 summary: A Python frame stack sampler for CPython
 description: |
   Austin is a Python frame stack sampler for CPython written in pure C. It
@@ -19,13 +24,14 @@ architectures:
 parts:
   austin:
     plugin: autotools
-    source: git://github.com/P403n1x87/austin
+    source: https://github.com/P403n1x87/austin
+    source-type: git
     source-depth: 1
-    build-packages: [libunwind-dev, binutils-dev, libiberty-dev]
+    build-packages: [libunwind-dev, binutils-dev, libiberty-dev, zlib1g-dev]
     stage-packages: [libbinutils]
 
 apps:
   austin:
     command: usr/local/bin/austin
-  austinp:
+  p:
     command: usr/local/bin/austinp
