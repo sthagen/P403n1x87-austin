@@ -23,11 +23,16 @@
 AM_CFLAGS = -I$(srcdir) -Wall -Werror -Wno-unused-command-line-argument -pthread
 OPT_FLAGS = -O3
 STRIP_FLAGS = -Os -s
+DEBUG_OPTS = 
 
 if DEBUG_SYMBOLS
-DEBUG_OPTS = -g -DDEBUG
-austin_LDADD = -lm
+DEBUG_OPTS += -g
 undefine STRIP_FLAGS
+endif
+
+if DEBUG
+DEBUG_OPTS += -DDEBUG
+austin_LDADD = -lm
 endif
 
 if COVERAGE
@@ -47,8 +52,11 @@ austin_SOURCES = \
   argparse.c     \
   austin.c       \
   cache.c        \
+  env.c          \
   error.c        \
+  events.c       \
   logging.c      \
+  stack.c        \
   stats.c        \
   platform.c     \
   py_proc_list.c \

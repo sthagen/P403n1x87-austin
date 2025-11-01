@@ -25,15 +25,12 @@
 //                   Python. The authors of those sources hold the copyright
 //                   for most of the content of this header file.
 
-#ifndef PYTHON_CEVAL_H
-#define PYTHON_CEVAL_H
+#pragma once
 
 #include "gil.h"
 #include "misc.h"
 
 struct _ceval_runtime_state3_11 {
-  _Py_atomic_int signals_pending;
-  struct _gil_runtime_state3_11 gil;
+    _Py_atomic_int                signals_pending;
+    struct _gil_runtime_state3_11 gil;
 };
-
-#endif

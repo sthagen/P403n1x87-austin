@@ -20,9 +20,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-#ifndef TIMER_H
-#define TIMER_H
-
+#pragma once
 
 #include <unistd.h>
 
@@ -33,26 +31,21 @@
 #ifndef AUSTIN_C
 extern
 #endif
-ctime_t _sample_timestamp;
-
+    microseconds_t _sample_timestamp;
 
 static inline void
 stopwatch_start(void) {
-  _sample_timestamp = gettime();
+    _sample_timestamp = gettime();
 } /* timer_start */
 
-
-static inline ctime_t
+static inline microseconds_t
 stopwatch_duration(void) {
-  return gettime() - _sample_timestamp;
+    return gettime() - _sample_timestamp;
 } /* timer_stop */
 
-
 static inline void
-stopwatch_pause(ctime_t delta) {
-  // Pause if sampling took less than the sampling interval.
-  if (delta < pargs.t_sampling_interval)
-    usleep(pargs.t_sampling_interval - delta);
+stopwatch_pause(microseconds_t delta) {
+    // Pause if sampling took less than the sampling interval.
+    if (delta < pargs.t_sampling_interval)
+        usleep(pargs.t_sampling_interval - delta);
 }
-
-#endif

@@ -8,8 +8,7 @@ from subprocess import check_output
 from tempfile import TemporaryDirectory
 from test.utils import allpythons
 from test.utils import austin
-from test.utils import compress
-from test.utils import has_pattern
+from test.utils import has_frame
 from test.utils import requires_sudo
 from test.utils import run_python
 from test.utils import threads
@@ -89,10 +88,10 @@ def test_uwsgi(py):
         with uwsgi(env=env) as uw:
             request_thread.start()
 
-            result = austin("-x", "2", "-Cp", str(uw.pid))
-            assert has_pattern(result.stdout, "app.py:application:5"), compress(
-                result.stdout
+            result = austin(
+                "-x", "2", "-i", "100ms", "-Cp", str(uw.pid), expect_fail=True
             )
+            assert has_frame(result.samples, "app.py", "application", 5)
 
         request_thread.join()
 
@@ -108,13 +107,13 @@ def test_uwsgi_multiprocess(py):
         ) as uw:
             request_thread.start()
 
-            result = austin("-x", "2", "-Cp", str(uw.pid))
-            assert has_pattern(result.stdout, "app.py:application:5"), compress(
-                result.stdout
+            result = austin(
+                "-x", "2", "-i", "100ms", "-Cp", str(uw.pid), expect_fail=True
             )
+            assert has_frame(result.samples, "app.py", "application", 5)
 
-            ts = threads(result.stdout)
+            ts = threads(result.samples)
             assert len(ts) >= 4, ts
-            assert len({p for p, _ in ts}) >= 2, ts
+            assert len({p for p, _, _ in ts}) >= 2, ts
 
         request_thread.join()

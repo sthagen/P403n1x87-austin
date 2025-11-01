@@ -22,7 +22,6 @@
 
 #pragma once
 
-
 #include <pthread.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -33,102 +32,90 @@
 #include "../hints.h"
 #include "../stats.h"
 
-
-#define PTHREAD_BUFFER_ITEMS  200
-
-
-#if defined __arm__
-#define ADDR_FMT "%x"
-#define SIZE_FMT "%d"
-#else
-#define ADDR_FMT "%lx"
-#define SIZE_FMT "%ld"
-#endif
-
+#define PTHREAD_BUFFER_ITEMS 200
 
 struct _proc_extra_info {
-  unsigned int page_size;
-  char         statm_file[24];
-  pthread_t    wait_thread_id;
-  unsigned int pthread_tid_offset;
-  uintptr_t    _pthread_buffer[PTHREAD_BUFFER_ITEMS];
+    unsigned int page_size;
+    char         statm_file[24];
+    pthread_t    wait_thread_id;
+    unsigned int pthread_tid_offset;
+    uintptr_t    _pthread_buffer[PTHREAD_BUFFER_ITEMS];
 };
 
-
-#define read_pthread_t(py_proc, addr) \
-  (copy_memory( \
-    py_proc->proc_ref, \
-    addr, \
-    sizeof(py_proc->extra->_pthread_buffer), \
-    py_proc->extra->_pthread_buffer \
-  ))
-
+#define read_pthread_t(py_proc, addr)                                                                           \
+    (copy_memory(py_proc->ref, addr, sizeof(py_proc->extra->_pthread_buffer), py_proc->extra->_pthread_buffer))
 
 #ifdef NATIVE
 #include <sched.h>
 
 static inline int
-wait_ptrace(enum __ptrace_request request, pid_t pid, void * addr, void * data) {
-  int outcome = 0;
-  ctime_t end = gettime() + 100000;  // Wait for 100ms
-  
-  while (gettime() < end && (outcome = ptrace(request, pid, addr, data)) && errno == 3)
-    sched_yield();
+wait_ptrace(enum __ptrace_request request, pid_t pid, void* addr, void* data) {
+    int            outcome = 0;
+    microseconds_t end     = gettime() + 100000; // Wait for 100ms
 
-  #ifdef DEBUG
-  ctime_t wait = gettime() - end + 100000;
-  if (wait > 1000)
-    log_d("ptrace long wait for request %d: %ld microseconds", request, wait);
-  #endif
-  
-  return outcome;
+    while (gettime() < end && (outcome = ptrace(request, pid, addr, data)) && errno == 3)
+        sched_yield();
+
+#ifdef DEBUG
+    microseconds_t wait = gettime() - end + 100000;
+    if (wait > 1000)
+        log_d("ptrace long wait for request %d: " MICROSECONDS_FMT " microseconds", request, wait);
+#endif
+
+    if (fail(outcome)) {
+        set_error(OS, "wait for ptrace request failed");
+        FAIL;
+    }
+
+    SUCCESS;
 }
 
 #endif
 
-
 // ----------------------------------------------------------------------------
 static inline FILE*
-_procfs(pid_t pid, char * file) {
-  FILE * fp;
-  char   buffer[32];
-  
-  sprintf(buffer, "/proc/%d/%s", pid, file);
-  
-  fp = fopen(buffer, "rb");
-  if (fp == NULL) {
-    switch (errno) {
-    case EACCES:  // Needs elevated privileges
-      set_error(EPROCPERM);
-      break;
-    case ENOENT:  // Invalid pid
-      set_error(EPROCNPID);
-      break;
-    default:
-      set_error(EPROCVM);
-    }
-  }
+_procfs(pid_t pid, char* file) {
+    FILE* fp;
+    char  buffer[32];
 
-  return fp;
+    sprintf(buffer, "/proc/%d/%s", pid, file);
+
+    fp = fopen(buffer, "rb");
+    if (!isvalid(fp)) { // GCOV_EXCL_START
+        switch (errno) {
+        case EACCES: // Needs elevated privileges
+            set_error(PERM, "Cannot read from procfs");
+            break;
+        case ENOENT: // Invalid pid
+            set_error(OS, "No such process");
+            break;
+        default:
+            set_error(OS, "Unknown error");
+        } // GCOV_EXCL_STOP
+    }
+
+    return fp;
 }
 
-
 // ----------------------------------------------------------------------------
-static inline char *
-proc_root(pid_t pid, char * file) {
-  if (file[0] != '/') {
-    log_e("File path is not absolute");  // GCOV_EXCL_START
-    return NULL;  // GCOV_EXCL_STOP
-  }
+static inline char*
+proc_root(pid_t pid, char* file) {
+    if (file[0] != '/') { // GCOV_EXCL_START
+        set_error(IO, "File path is not absolute");
+        FAIL_PTR;
+    } // GCOV_EXCL_STOP
 
-  char * proc_root = calloc(1, strlen(file) + 24);
-  if (!isvalid(proc_root))
-    return NULL;  // GCOV_EXCL_LINE
+    char* proc_root = calloc(1, strlen(file) + 24);
+    if (!isvalid(proc_root)) { // GCOV_EXCL_START
+        set_error(MALLOC, "Cannot allocate memory for proc root path");
+        FAIL_PTR;
+    } // GCOV_EXCL_STOP
 
-  if (sprintf(proc_root, "/proc/%d/root%s", pid, file) < 0) {
-    free(proc_root);  // GCOV_EXCL_START
-    return NULL;  // GCOV_EXCL_STOP
-  }
-  
-  return proc_root;
+    if (sprintf(proc_root, "/proc/%d/root%s", pid, file) < 0) { // GCOV_EXCL_START
+        free(proc_root);
+        set_error(MALLOC, "Cannot format proc root path");
+        FAIL_PTR;
+    } // GCOV_EXCL_STOP
+
+    return proc_root;
 }

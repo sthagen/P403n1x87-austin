@@ -30,17 +30,26 @@
 #include <windows.h>
 #endif
 
-
 static inline void
 yield() {
-#if defined PL_UNIX
+#if defined DEBUG
+    // Reduce the startup log noise.
+    usleep(50000);
+#elif defined PL_UNIX
     sched_yield();
 #else
     Sleep(0);
 #endif
 }
 
-
-#define TIMER_START(d) {__label__ _s;ctime_t _e=(gettime()+d);while(gettime()<=_e){
-#define TIMER_END      yield();}_s:;}
-#define TIMER_STOP     goto _s;
+#define TIMER_START(d)                       \
+    {                                        \
+        __label__ _s;                        \
+        microseconds_t _e = (gettime() + d); \
+        while (gettime() <= _e) {
+#define TIMER_END \
+    yield();      \
+    }             \
+    _s:;          \
+    }
+#define TIMER_STOP goto _s;

@@ -22,16 +22,12 @@
 
 from itertools import takewhile
 from subprocess import check_output
-
 from test.utils import allpythons
 from test.utils import austin
-from test.utils import compress
-from test.utils import has_pattern
-from test.utils import metadata
+from test.utils import has_frame
 from test.utils import processes
 from test.utils import python
-from test.utils import samples
-from test.utils import sum_metric
+from test.utils import sum_metrics
 from test.utils import target
 from test.utils import threads
 
@@ -42,21 +38,21 @@ def test_pipe_wall_time(py):
     result = austin("-Pi", f"{interval}ms", *python(py), target())
     assert result.returncode == 0
 
-    meta = metadata(result.stdout)
+    meta = result.metadata
 
-    assert ".".join((str(_) for _ in meta["python"])).startswith(py), meta
+    assert meta["python"].startswith(py), meta
     assert meta["mode"] == "wall", meta
     assert int(meta["duration"]) > 100000, meta
     assert meta["interval"] == str(interval * 1000), meta
 
-    assert len(processes(result.stdout)) == 1
-    ts = threads(result.stdout)
+    assert len(processes(result.samples)) == 1
+    ts = threads(result.samples)
     assert len(ts) == 2, ts
 
-    assert has_pattern(result.stdout, "target34.py:keep_cpu_busy:32")
-    assert not has_pattern(result.stdout, "Unwanted")
+    assert has_frame(result.samples, "target34.py", "keep_cpu_busy", 32)
+    assert b"Unwanted" not in result.stdout
 
-    a = sum_metric(result.stdout)
+    a, _ = sum_metrics(result.samples)
     d = int(meta["duration"])
 
     assert 0 < 0.8 * d < a < 2.2 * d
@@ -64,12 +60,12 @@ def test_pipe_wall_time(py):
 
 @allpythons()
 def test_pipe_cpu_time(py):
-    result = austin("-sPi", "1ms", *python(py), target())
+    result = austin("-cPi", "1ms", *python(py), target())
     assert result.returncode == 0
 
-    meta = metadata(result.stdout)
+    meta = result.metadata
 
-    assert ".".join((str(_) for _ in meta["python"])).startswith(py), meta
+    assert meta["python"].startswith(py), meta
     assert meta["mode"] == "cpu", meta
     assert int(meta["duration"]) > 100000, meta
     assert meta["interval"] == "1000", meta
@@ -80,39 +76,28 @@ def test_pipe_wall_time_multiprocess(py):
     result = austin("-CPi", "1ms", *python(py), target())
     assert result.returncode == 0
 
-    meta = metadata(result.stdout)
+    meta = result.metadata
 
     assert meta["mode"] == "wall", meta
     assert int(meta["duration"]) > 100000, meta
     assert meta["interval"] == "1000", meta
     assert meta["multiprocess"] == "on", meta
-    assert ".".join((str(_) for _ in meta["python"])).startswith(py), meta
+    assert meta["python"].startswith(py), meta
 
 
 @allpythons()
 def test_pipe_wall_time_multiprocess_output(py, tmp_path):
-    datafile = tmp_path / "test_pipe.austin"
-
-    result = austin("-CPi", "1ms", "-o", str(datafile), *python(py), target())
+    result = austin("-CPi", "1ms", *python(py), target(), convert=True)
     assert result.returncode == 0
 
-    with datafile.open() as f:
-        data = f.read()
-        meta = metadata(data)
+    meta = result.metadata
 
-        assert meta, meta
-        assert meta["mode"] == "wall", meta
-        assert int(meta["duration"]) > 100000, meta
-        assert meta["interval"] == "1000", meta
-        assert meta["multiprocess"] == "on", meta
-        assert ".".join((str(_) for _ in meta["python"])).startswith(py), meta
-
-        assert has_pattern(data, "target34.py:keep_cpu_busy:32"), compress(data)
-
-        a = sum(int(_.rpartition(" ")[-1]) for _ in samples(data))
-        d = int(meta["duration"])
-
-        assert 0 < 0.8 * d < a < 2.2 * d
+    assert meta, result.stdout
+    assert meta["mode"] == "wall", meta
+    assert int(meta["duration"]) > 100000, meta
+    assert meta["interval"] == "1000", meta
+    assert meta["multiprocess"] == "on", meta
+    assert meta["python"].startswith(py), meta
 
 
 @allpythons(min=(3, 11))
@@ -120,9 +105,9 @@ def test_python_version(py):
     result = austin("-Pi", "1s", *python(py), target())
     assert result.returncode == 0
 
-    meta = metadata(result.stdout)
+    meta = result.metadata
 
-    reported_version = ".".join((str(_) for _ in meta["python"]))
+    reported_version = meta["python"]
 
     # Take the version from the interpreter itself, discarding anything after
     # the patchlevel.
@@ -134,3 +119,6 @@ def test_python_version(py):
     )
 
     assert reported_version == actual_version, meta
+
+
+# TODO: Test TTY behaviour

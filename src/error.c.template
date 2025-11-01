@@ -5,7 +5,7 @@
 //
 // Austin is a Python frame stack sampler for CPython.
 //
-// Copyright (c) 2018-2021 Gabriele N. Tornetta <phoenix1987@gmail.com>.
+// Copyright (c) 2018 Gabriele N. Tornetta <phoenix1987@gmail.com>.
 // All rights reserved.
 //
 // This program is free software: you can redistribute it and/or modify
@@ -20,24 +20,28 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-#ifndef HEAP_H
-#define HEAP_H
+#define ERROR_C
 
-#include <sys/types.h>
+#include <stdlib.h>
 
-typedef struct {
-    void   * lo;
-    void   * hi;
-    void   * newlo;
-    void   * newhi;
-} _mem_block_t;
+#include "error.h"
+#include "platform.h"
 
+#define MAXERROR [[max_error]]
 
 typedef struct {
-    void   * content;
-    size_t   size;
-} _heap_t;
+    char* msg;
+    bool  fatal;
+} error_info_t;
 
-#define NULL_MEM_BLOCK ((_mem_block_t) {(void *) -1, NULL, (void *) -1, NULL})
+const error_info_t _error_info_tab[MAXERROR] = {[[error_info_table]]};
 
-#endif
+const char*
+error_get_msg(error_t n) {
+    return n < MAXERROR ? _error_info_tab[n].msg : "<Unknown error>";
+}
+
+const bool
+is_fatal(error_t n) {
+    return n < MAXERROR ? _error_info_tab[n].fatal : false;
+}

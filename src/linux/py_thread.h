@@ -21,6 +21,7 @@
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #include <fcntl.h>
+#include <inttypes.h>
 #include <pthread.h>
 #include <stdio.h>
 #include <string.h>
@@ -32,35 +33,41 @@
 #include "../py_thread.h"
 #include "../resources.h"
 
-
 // ----------------------------------------------------------------------------
-static int
-_py_thread__is_idle(py_thread_t * self) {
-  char file_name[64];
-  char buffer[2048] = "";
+bool
+py_thread__is_idle(py_thread_t* self) {
+#ifdef NATIVE
+    size_t index  = self->tid >> 3;
+    int    offset = self->tid & 7;
 
-  sprintf(file_name, "/proc/%d/task/" SIZE_FMT "/stat", self->proc->pid, self->tid);
-  
-  cu_fd fd = open(file_name, O_RDONLY);
-  if (fd == -1) {
-    log_d("Cannot open %s", file_name);
-    return -1;
-  }
+    return _tids_idle[index] & (1 << offset);
+#else
+    char file_name[64];
+    char buffer[2048] = "";
 
-  if (read(fd, buffer, 2047) == 0) {
-    log_d("Cannot read %s", file_name);
-    return -1;
-  }
+    sprintf(file_name, "/proc/%d/task/%" PRIuPTR "/stat", self->proc->pid, self->tid);
 
-  char * p = strchr(buffer, ')');
-  if (!isvalid(p)) {
-    log_d("Invalid format for procfs file %s", file_name);
-    return -1;
-  }
+    cu_fd fd = open(file_name, O_RDONLY);
+    if (fd == -1) { // GCOV_EXCL_START
+        set_error(IO, "Cannot open thread stat file");
+        FAIL_BOOL;
+    } // GCOV_EXCL_STOP
 
-  p+=2;
-  if (*p == ' ')
-    p++;
+    if (read(fd, buffer, 2047) == 0) { // GCOV_EXCL_START
+        set_error(IO, "Cannot read thread stat file");
+        FAIL_BOOL;
+    } // GCOV_EXCL_STOP
 
-  return (*p != 'R');
+    char* p = strchr(buffer, ')'); // GCOV_EXCL_START
+    if (!isvalid(p)) {
+        set_error(OS, "Invalid thread stat file");
+        FAIL_BOOL;
+    } // GCOV_EXCL_STOP
+
+    p += 2;
+    if (*p == ' ')
+        p++; // GCOV_EXCL_LINE
+
+    return (*p != 'R');
+#endif
 }

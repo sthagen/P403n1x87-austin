@@ -16,12 +16,12 @@ METADATA = {
         "Development Status :: 5 - Production/Stable",
         "Intended Audience :: Developers",
         "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",
-        "Programming Language :: Python :: 3.8",
         "Programming Language :: Python :: 3.9",
         "Programming Language :: Python :: 3.10",
         "Programming Language :: Python :: 3.11",
         "Programming Language :: Python :: 3.12",
         "Programming Language :: Python :: 3.13",
+        "Programming Language :: Python :: 3.14",
     ],
     "Project-URL": [
         "Homepage, https://github.com/P403n1x87/austin",
@@ -82,7 +82,7 @@ def make_message(headers, payload=None):
 
 def write_austin_wheel(out_dir, *, version, platform, austin_bin_data):
     package_name = "austin-dist"
-    python = ".".join(("py2", "py3"))
+    python = "py3"
     dist_name = package_name.replace("-", "_")
     wheel_name = f"{dist_name}-{version}-{python}-none-{platform}.whl"
     dist_info = f"{dist_name}-{version}.dist-info"
@@ -104,7 +104,12 @@ def write_austin_wheel(out_dir, *, version, platform, austin_bin_data):
             "Version": version,
             **METADATA,
         },
-        Path("README.md").read_text("utf-8"),
+        Path("README.md")
+        .read_text("utf-8")
+        .replace(
+            'img src="art',
+            'img src="https://raw.githubusercontent.com/P403n1x87/austin/refs/heads/master/art',
+        ),
     )
     contents[f"{dist_info}/WHEEL"] = make_message(
         {

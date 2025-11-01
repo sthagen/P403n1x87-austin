@@ -20,51 +20,38 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-#ifndef PY_THREAD_H
-#define PY_THREAD_H
+#pragma once
 
+#include <stdbool.h>
 #include <stdint.h>
 #include <sys/types.h>
 
 #include "cache.h"
 #include "mem.h"
 #include "py_proc.h"
+#include "stack.h"
 #include "stats.h"
 
-
-#define MAXLEN                      1024
-#define MAX_STACK_SIZE              2048
-#ifdef NATIVE
-// In native mode we have both the Python and native stacks (the kernel stack
-// is negligible). We make sure we have a cache large enough to hold the full.
-// stack.
-#define MAX_FRAME_CACHE_SIZE        (MAX_STACK_SIZE << 1)
-#else
-#define MAX_FRAME_CACHE_SIZE        MAX_STACK_SIZE
-#endif
-#define MAX_STRING_CACHE_SIZE       LRU_CACHE_EXPAND
-
+#define MAXLEN         1024
+#define MAX_STACK_SIZE 2048
 
 typedef struct thread {
-  raddr_t         raddr;
-  raddr_t         next_raddr;
+    py_proc_t* proc;
 
-  py_proc_t     * proc;
+    raddr_t addr;
+    raddr_t next;
 
-  uintptr_t       tid;
-  struct thread * next;
+    uintptr_t tid;
 
-  void          * top_frame;
+    raddr_t top_frame;
 
-  int             invalid;
+    /* The per-thread datastack was introduced in Python 3.11 */
+    stack_chunk_t* stack;
 
-  /* The per-thread datastack was introduced in Python 3.11 */
-  void           * stack;
-  size_t           stack_size;
-
-  tstate_status_t  status;
+    tstate_status_t status;
 } py_thread_t;
 
+#define py_thread__init(_proc) {.proc = _proc}
 
 /**
  * Fill the thread structure from the given remote address.
@@ -74,8 +61,7 @@ typedef struct thread {
  * @param py_proc_t    the Python process the thread belongs to.
  */
 int
-py_thread__fill_from_raddr(py_thread_t *, raddr_t *, py_proc_t *);
-
+py_thread__read_remote(py_thread_t*, raddr_t);
 
 /**
  * Get the next thread, if any.
@@ -85,20 +71,15 @@ py_thread__fill_from_raddr(py_thread_t *, raddr_t *, py_proc_t *);
  * @return a pointer to the next py_thread_t instance.
  */
 int
-py_thread__next(py_thread_t *);
-
+py_thread__next(py_thread_t*);
 
 /**
- * Print the frame stack using the collapsed format.
+ * Unwind the thread.
  *
  * @param  py_thread_t  self.
- * @param  int64_t      the interpreter ID.
- * @param  ctime_t      the time delta.
- * @param  ssize_t      the memory delta.
  */
 void
-py_thread__emit_collapsed_stack(py_thread_t *, int64_t, ctime_t, ssize_t);
-
+py_thread__unwind(py_thread_t*);
 
 /**
  * Allocate memory for dumping the thread data.
@@ -108,7 +89,6 @@ py_thread__emit_collapsed_stack(py_thread_t *, int64_t, ctime_t, ssize_t);
 int
 py_thread_allocate(void);
 
-
 /**
  * Deallocate memory for dumping the thread data.
  */
@@ -117,17 +97,17 @@ py_thread_free(void);
 
 #ifdef NATIVE
 int
-py_thread__set_idle(py_thread_t *);
+py_thread__set_idle(py_thread_t*);
 
 int
-py_thread__set_interrupted(py_thread_t *, int);
+py_thread__set_interrupted(py_thread_t*, bool);
 
 int
-py_thread__is_interrupted(py_thread_t * self);
+py_thread__is_interrupted(py_thread_t* self);
 
 int
-py_thread__save_kernel_stack(py_thread_t *);
+py_thread__save_kernel_stack(py_thread_t*);
 #endif
 
-
-#endif // PY_THREAD_H
+bool
+py_thread__is_idle(py_thread_t*);

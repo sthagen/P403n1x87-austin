@@ -1,8 +1,11 @@
 import ctypes
+import os
 import re
+import sys
 from ctypes import CDLL
 from ctypes import POINTER
 from ctypes import Structure
+from ctypes import c_bool
 from ctypes import c_char_p
 from ctypes import c_long
 from ctypes import c_void_p
@@ -14,6 +17,7 @@ from subprocess import run
 from types import ModuleType
 from typing import Any
 from typing import Callable
+from typing import Iterable
 from typing import Optional
 from typing import Type
 
@@ -28,6 +32,12 @@ ROOT = TEST.parent
 SRC = ROOT / "src"
 
 
+# ANSI color codes for print
+RESET = "\033[0m"
+BOLD_YELLOW = "\033[1;33m"
+BOLD_RED = "\033[1;31m"
+
+
 restrict_re = re.compile(r"__restrict \w+")
 
 _header_head = r"""
@@ -35,6 +45,7 @@ _header_head = r"""
 #define __extension__
 #define __inline inline
 #define __asm__(x)
+#define __asm(x)
 #define __const const
 #define __inline__ inline
 #define __inline inline
@@ -43,8 +54,21 @@ _header_head = r"""
 #define __GNUC_VA_LIST
 #define __gnuc_va_list char
 #define __thread
-// typedef struct __builtin_va_list { } __builtin_va_list;
+#define __typeof__(x) void*
+typedef struct __builtin_va_list { } __builtin_va_list;
+#define _Nullable
+#define __uint128_t unsigned long long
+#define _Nonnull
+#define __float128 long double
+// Avoid redirection to float128 ABI on ppc64el.
+#if __LDBL_MANT_DIG__ == 113
+#  undef __LDBL_MANT_DIG__
+#  define __LDBL_MANT_DIG__ __DBL_MANT_DIG__
+#endif
 """
+
+
+CC = os.getenv("CC", "gcc")
 
 
 def preprocess(source: Path) -> str:
@@ -53,7 +77,7 @@ def preprocess(source: Path) -> str:
         return restrict_re.sub(
             "",
             run(
-                ["gcc", "-E", "-P", "-"],
+                [CC, "-E", "-P", "-"],
                 stdout=PIPE,
                 input=code.encode(),
                 cwd=SRC,
@@ -65,6 +89,24 @@ class CompilationError(Exception):
     pass
 
 
+match sys.platform:
+    case "linux":
+        SHARED_OBJECT_SUFFIX = ".so"
+    case "darwin":
+        SHARED_OBJECT_SUFFIX = ".dylib"
+    case "win32":
+        SHARED_OBJECT_SUFFIX = ".dll"
+
+
+def needs_build(sources: Iterable[Path], target: Path) -> bool:
+    if not target.exists():
+        return True
+
+    target_mtime = target.stat().st_mtime
+
+    return any(source.stat().st_mtime > target_mtime for source in sources)
+
+
 def compile(
     source: Path,
     cflags: list[str] = [],
@@ -72,14 +114,13 @@ def compile(
     ldadd: list[str] = [],
     force: bool = False,
 ) -> None:
-    binary = source.with_suffix(".so")
-
-    if not force and binary.is_file():
+    binary = source.with_suffix(SHARED_OBJECT_SUFFIX)
+    if not (force or needs_build([source, *extra_sources], binary)):
         return
 
     result = run(
         [
-            "gcc",
+            CC,
             "-shared",
             *cflags,
             "-o",
@@ -99,7 +140,15 @@ def compile(
     raise CompilationError(result.stdout.decode())
 
 
-C = CDLL("libc.so.6")
+match sys.platform:
+    case "linux":
+        C = CDLL("libc.so.6")
+    case "darwin":
+        import ctypes.util
+
+        C = CDLL(ctypes.util.find_library("c"))
+    case "win32":
+        C = CDLL("msvcrt.dll")
 
 
 class CFunctionDef:
@@ -134,14 +183,12 @@ class CType(Structure):
 class CFunction:
     def __init__(self, cfuncdef: CFunctionDef, cfunc: Callable[..., Any]) -> None:
         self.__name__ = cfuncdef.name
-        self.__args__ = [_[0] for _ in cfuncdef.args]
+        self.__args__ = [_[0] for _ in cfuncdef.args if _ is not None]
         self.__cfunc__ = cfunc
 
         # Prevent argument values from being truncated/mangled
-        self.__cfunc__.argtypes = [_[1] for _ in cfuncdef.args]
-        self.__cfunc__.restype = (
-            cfuncdef.rtype if cfuncdef.rtype is not None else c_long
-        )
+        self.__cfunc__.argtypes = [_[1] for _ in cfuncdef.args if _ is not None]
+        self.__cfunc__.restype = cfuncdef.rtype
 
         self._posonly = all(_ is None for _ in self.__args__)
 
@@ -159,8 +206,8 @@ class CFunction:
         self.check_args(args, kwargs)
         return self.__cfunc__(*args, **kwargs)
 
-    def __repr__(self) -> None:
-        return f"<CFunction '{self.__name__}'>"
+    def __repr__(self) -> str:
+        return f"<CFunction '{self.__name__}({', '.join(self.__args__)})'>"
 
 
 class CMethod(CFunction):
@@ -171,6 +218,9 @@ class CMethod(CFunction):
         self.__ctype__ = ctype
 
     def __get__(self, obj: Any, objtype: Optional[Type] = None) -> None:
+        if obj is None:
+            return self
+
         def _(*args, **kwargs):
             cargs = [obj.__cself__, *args]
             self.check_args(cargs, kwargs)
@@ -178,11 +228,16 @@ class CMethod(CFunction):
             return self.__cfunc__(*cargs, **kwargs)
 
         _.__cmethod__ = self
+        _.__name__ = (
+            f"<bound CMethod '{self.__ctype__.__name__}.{self.__name__}' "
+            f"of {obj.__cself__}>"
+        )
+        _.__repr__ = lambda self: self.__name__
 
         return _
 
     def __repr__(self) -> str:
-        return f"<CMethod '{self.__name__}' of CType '{self.__ctype__.__name__}'>"
+        return f"<CMethod '{self.__ctype__.__name__}.{self.__name__}'>"
 
 
 class CStaticMethod(CFunction):
@@ -193,7 +248,7 @@ class CStaticMethod(CFunction):
         self.__ctype__ = ctype
 
     def __repr__(self) -> str:
-        return f"<CStaticMethod '{self.__name__}' of CType '{self.__ctype__.__name__}'>"
+        return f"<CStaticMethod '{self.__ctype__.__name__}.{self.__name__}'>"
 
 
 class CMetaType(type(Structure)):
@@ -235,7 +290,7 @@ class DeclCollector(c_ast.NodeVisitor):
             struct = node.type.type
             self.types[node.type.declname[:-2]] = CTypeDef(
                 node.type.declname,
-                [decl.name for decl in struct.decls],
+                [decl.name for decl in struct.decls or []],
             )
 
     def visit_Decl(self, node: c_ast.Node) -> None:
@@ -245,13 +300,28 @@ class DeclCollector(c_ast.NodeVisitor):
         if isinstance(node.type, c_ast.FuncDecl):
             func_name = node.name
             ret_type = node.type.type
-            rtype = None
-            if isinstance(ret_type, c_ast.PtrDecl):
-                if "".join(ret_type.type.type.names) == "char":
-                    rtype = c_char_p
-                else:
-                    rtype = c_void_p
+            rtype: Optional[Any] = None
 
+            if isinstance(ret_type, c_ast.TypeDecl) and isinstance(
+                ret_type.type, c_ast.IdentifierType
+            ):  # Non-pointer return type
+                type_name = "".join(ret_type.type.names)
+                rtype = (
+                    c_bool
+                    if type_name == "_Bool"
+                    else getattr(ctypes, f"c_{type_name}", c_long)
+                )
+
+            elif isinstance(ret_type, c_ast.PtrDecl) and isinstance(
+                ret_type.type.type, c_ast.IdentifierType
+            ):  # Pointer return type
+                rtype = (
+                    c_char_p
+                    if "".join(ret_type.type.type.names) == "char"
+                    else c_void_p
+                )
+
+            # Function arguments
             args = (
                 [
                     (
@@ -267,18 +337,21 @@ class DeclCollector(c_ast.NodeVisitor):
                 if node.type.args is not None
                 else []
             )
-            if func_name.endswith("_new"):
+
+            if func_name.endswith("_new"):  # Constructor
                 self.types[f"{func_name[:-4]}"].constructor = CFunctionDef(
                     "new", args, rtype
                 )
-            elif "__" in func_name:
+
+            elif "__" in func_name:  # Method
                 type_name, _, method_name = func_name.partition("__")
                 if not type_name:
                     return
                 self.types[type_name].methods.append(
                     CFunctionDef(method_name, args, rtype)
                 )
-            else:
+
+            else:  # Function
                 self.functions.append(CFunctionDef(func_name, args, rtype))
 
     def collect(self, decl: str) -> dict[str, CTypeDef]:
@@ -292,10 +365,10 @@ class DeclCollector(c_ast.NodeVisitor):
             )
             for i in range(max(0, line - 4), min(line + 5, len(lines))):
                 if i != line:
-                    print(f"{i+1:5d}  {lines[i]}")
+                    print(f"{i + 1:5d}  {lines[i]}")
                 else:
-                    print(f"{i+1:5d}  \033[33;1m{lines[line]}\033[0m")
-                    print(" " * (col + 5) + "\033[31;1m<<^\033[0m")
+                    print(f"{i + 1:5d}  {BOLD_YELLOW}{lines[line]}{RESET}")
+                    print(" " * (col + 5) + f"{BOLD_RED}<<^{RESET}")
             raise
 
         self.visit(ast)
@@ -310,15 +383,15 @@ class CModule(ModuleType):
     def __init__(self, source: Path) -> None:
         super().__init__(source.name, f"Generated from {source.with_suffix('.c')}")
 
-        so_file = source.with_suffix(".so")
+        shared_object_file = source.with_suffix(SHARED_OBJECT_SUFFIX)
         while True:
             try:
-                self.__binary__ = CDLL(so_file)
+                self.__binary__ = CDLL(str(shared_object_file))
                 break
             except OSError:
                 # On parallel runs we might still be compiling the source file
                 # so we try until we succeed.
-                if not so_file.exists():
+                if not shared_object_file.exists():
                     raise
 
         collector = DeclCollector()
