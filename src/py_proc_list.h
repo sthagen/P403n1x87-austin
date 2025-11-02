@@ -20,29 +20,27 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-#ifndef PY_PROC_LIST_H
-#define PY_PROC_LIST_H
+#pragma once
+
+#include <stdbool.h>
 
 #include "cache.h"
 #include "py_proc.h"
 #include "resources.h"
 
-
 typedef struct _py_proc_item {
-  py_proc_t            * py_proc;
-  struct _py_proc_item * next;
-  struct _py_proc_item * prev;
+    py_proc_t*            py_proc;
+    struct _py_proc_item* next;
+    struct _py_proc_item* prev;
 } py_proc_item_t;
 
-
 typedef struct {
-  int              count;            // Number of entries in the list
-  py_proc_item_t * first;            // First item in the list
-  lookup_t       * py_proc_for_pid;  // PID to py_proc_t lookup table
-  lookup_t       * ppid_for_pid;     // PID to PPID lookup table
-  ctime_t          timestamp;        // Timestamp of the last update
+    int             count;           // Number of entries in the list
+    py_proc_item_t* first;           // First item in the list
+    lookup_t*       py_proc_for_pid; // PID to py_proc_t lookup table
+    lookup_t*       ppid_for_pid;    // PID to PPID lookup table
+    microseconds_t  timestamp;       // Timestamp of the last update
 } py_proc_list_t;
-
 
 /**
  * Constructor.
@@ -52,20 +50,18 @@ typedef struct {
  * @param  py_proc_t  the parent process.
  */
 
-py_proc_list_t *
-py_proc_list_new(py_proc_t *);
-
+py_proc_list_t*
+py_proc_list_new(py_proc_t*);
 
 /**
  * Check if the list is empty.
  *
  * @param  py_proc_list_t  the list.
  *
- * @return 1 if empty; 0 otherwise.
+ * @return true if empty; false otherwise.
  */
-int
-py_proc_list__is_empty(py_proc_list_t *);
-
+bool
+py_proc_list__is_empty(py_proc_list_t*);
 
 /**
  * Add the the children of the given process to the list.
@@ -74,8 +70,7 @@ py_proc_list__is_empty(py_proc_list_t *);
  * @param  uintptr_t       the PID of the parent process.
  */
 void
-py_proc_list__add_proc_children(py_proc_list_t *, uintptr_t);
-
+py_proc_list__add_proc_children(py_proc_list_t*, uintptr_t);
 
 /**
  * Get the number of items in the list.
@@ -85,8 +80,7 @@ py_proc_list__add_proc_children(py_proc_list_t *, uintptr_t);
  * @return the number of items in the list.
  */
 int
-py_proc_list__size(py_proc_list_t *);
-
+py_proc_list__size(py_proc_list_t*);
 
 /**
  * Sample from all the processes in the list.
@@ -94,8 +88,7 @@ py_proc_list__size(py_proc_list_t *);
  * @param  py_proc_list_t  the list.
  */
 void
-py_proc_list__sample(py_proc_list_t *);
-
+py_proc_list__sample(py_proc_list_t*);
 
 /**
  * Update the list.
@@ -111,8 +104,7 @@ py_proc_list__sample(py_proc_list_t *);
  */
 
 void
-py_proc_list__update(py_proc_list_t *);
-
+py_proc_list__update(py_proc_list_t*);
 
 /**
  * Wait for all the processes in the list to terminate.
@@ -121,8 +113,7 @@ py_proc_list__update(py_proc_list_t *);
  */
 
 void
-py_proc_list__wait(py_proc_list_t *);
-
+py_proc_list__wait(py_proc_list_t*);
 
 /**
  * Destroy the list from memory.
@@ -130,10 +121,7 @@ py_proc_list__wait(py_proc_list_t *);
  * @param  py_proc_list_t  the list.
  */
 void
-py_proc_list__destroy(py_proc_list_t *);
+py_proc_list__destroy(py_proc_list_t*);
 
-
-CLEANUP_TYPE(py_proc_list_t, py_proc_list__destroy);
+CLEANUP_TYPE(py_proc_list_t, py_proc_list__destroy); // GCOV_EXCL_LINE
 #define cu_py_proc_list_t __attribute__((cleanup(py_proc_list__destroyt))) py_proc_list_t
-
-#endif

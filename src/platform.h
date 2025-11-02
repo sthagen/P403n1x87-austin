@@ -20,35 +20,31 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-#ifndef PLATFORM_H
-#define PLATFORM_H
-
-#include <stddef.h>
-
+#pragma once
 
 #if defined(__linux__)
-  #define PL_LINUX
-  #define _GNU_SOURCE
+#define PL_LINUX
+#define _GNU_SOURCE
 
-  #include <sys/types.h>
+#include <sys/types.h>
 
-  typedef pid_t proc_ref_t;
+typedef pid_t proc_ref_t;
 
 #elif defined(__APPLE__) && defined(__MACH__)
-  #define PL_MACOS
+#define PL_MACOS
 
-  #include <mach/mach_port.h>
+#include <mach/mach_port.h>
 
-  typedef mach_port_t proc_ref_t;
+typedef mach_port_t proc_ref_t;
 
 #elif defined(_WIN32) || defined(_WIN64)
-  #define PL_WIN
+#define PL_WIN
 
-  #include <windows.h>
+#include <windows.h>
 
-  #define NULL_DEVICE "NUL:"
+#define NULL_DEVICE "NUL:"
 
-  typedef HANDLE proc_ref_t;
+typedef HANDLE proc_ref_t;
 
 #endif
 
@@ -61,17 +57,30 @@
 // ----------------------------------------------------------------------------
 
 #if defined(PL_LINUX) || defined(PL_MACOS)
-  #define PL_UNIX
+#define PL_UNIX
 
-  #define NULL_DEVICE "/dev/null"
+#define NULL_DEVICE "/dev/null"
+#endif
+
+// ----------------------------------------------------------------------------
+
+#if defined PL_LINUX
+#define LIB_NEEDLE "libpython"
+#else
+#define LIB_NEEDLE "python"
 #endif
 
 // ----------------------------------------------------------------------------
 
 #if defined PL_MACOS
-#define PID_MAX                    99999  // From sys/proc_internal.h
+#define PID_MAX 99999 // From sys/proc_internal.h
 #endif
 
+// ----------------------------------------------------------------------------
+
+#include <stdbool.h>
+#include <stddef.h>
+#include <stdio.h>
 
 /**
  * Get the maximum PID for the platform.
@@ -79,4 +88,16 @@
 size_t
 pid_max();
 
-#endif
+/**
+ * Get the page size for the platform.
+ */
+size_t
+get_page_size();
+
+/**
+ * Check if the stream is a TTY.
+ * @param  FILE*  The output stream to check.
+ * @return true if the stream is a TTY, false otherwise.
+ */
+bool
+is_tty(FILE*);

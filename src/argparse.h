@@ -20,62 +20,58 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-#ifndef ARGPARSE_H
-#define ARGPARSE_H
+#pragma once
 
+#include <stdbool.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/types.h>
 
 #include "platform.h"
-#include "stats.h"
+
+typedef uint64_t microseconds_t;
+typedef uint64_t milliseconds_t;
+typedef uint64_t seconds_t;
+
+#define MICROSECONDS_MAX UINT64_MAX
 
 typedef struct {
-  ctime_t   t_sampling_interval;
-  ctime_t   timeout;
-  pid_t     attach_pid;
-  int       where;
-  int       sleepless;
-  char    * format;
-  #ifdef NATIVE
-  char    * native_format;
-  char    * kernel_format;
-  #endif
-  char    * head_format;
-  int       full;
-  int       memory;
-  int       binary;
-  FILE    * output_file;
-  char    * output_filename;
-  int       children;
-  ctime_t   exposure;
-  int       pipe;
-  int       gc;
-  size_t    heap;
-  #ifdef NATIVE
-  int       kernel;
-  #endif
+    microseconds_t t_sampling_interval;
+    milliseconds_t timeout;
+    pid_t          attach_pid;
+    char**         cmd;
+    bool           where;
+    bool           cpu;
+    bool           full;
+    bool           memory;
+    FILE*          output_file;
+    char*          output_filename;
+    bool           children;
+    seconds_t      exposure;
+    bool           pipe;
+    bool           gc;
+#ifdef NATIVE
+    bool kernel;
+#endif
 } parsed_args_t;
-
 
 #ifndef ARGPARSE_C
 extern parsed_args_t pargs;
 #endif
 
+#define ARG_ARGUMENT 0
 
-#define ARG_ARGUMENT                   0
+#define ARG_ERR_EXIT_STATUS       64
+#define ARG_STOP_PARSING          1
+#define ARG_CONTINUE_PARSING      0
+#define ARG_MISSING_OPT_ARG       -1
+#define ARG_UNRECOGNISED_LONG_OPT -2
+#define ARG_UNRECOGNISED_OPT      -3
+#define ARG_INVALID_VALUE         -4
+#define ARG_UNEXPECTED_OPT_ARG    -5
 
-#define ARG_STOP_PARSING               1
-#define ARG_CONTINUE_PARSING           0
-#define ARG_MISSING_OPT_ARG           -1
-#define ARG_UNRECOGNISED_LONG_OPT     -2
-#define ARG_UNRECOGNISED_OPT          -3
-#define ARG_INVALID_VALUE             -4
-#define ARG_UNEXPECTED_OPT_ARG        -5
-
-
-int parse_args(int argc, char ** argv);
+int
+parse_args(int argc, char** argv);
 
 // TODO: Implement error.
-
-#endif

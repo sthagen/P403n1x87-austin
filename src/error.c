@@ -25,131 +25,39 @@
 #include <stdlib.h>
 
 #include "error.h"
-#include "hints.h"
 #include "platform.h"
 
+#define MAXERROR 15
 
-#define MAXERROR              (5 << 3)
+typedef struct {
+    char* msg;
+    bool  fatal;
+} error_info_t;
 
-const char * _error_msg_tab[MAXERROR] = {
-  // generic error messages
-  "No error",
-  "Cannot open memory maps file",
-  "Cannot read remote memory",
-  "Cannot determine Python version",
-  "Cannot redirect STDOUT to " NULL_DEVICE,
-  "No command nor valid PID",
-  "Binary has no symbols",
-  NULL,
-
-  // PyCodeObject
-  "Failed to retrieve PyCodeObject",
-  "Encountered unsupported string format",
-  "Not a compact unicode object",
-  "Failed to retrieve PyBytesObject",
-  "Unable to get filename from code object",
-  "Unable to get function name from code object",
-  "Unable to get line number from code object",
-  "Failed to retrieve PyUnicodeObject",
-
-  // PyFrameObject
-  "Failed to create frame object",
-  "Failed to get code object for frame",
-  "Invalid frame",
-  NULL,
-  NULL,
-  NULL,
-  NULL,
-  NULL,
-
-  // py_thread_t
-  "Failed to create thread object",
-  "Failed to get top frame for thread",
-  "Invalid thread",
-  "No next thread",
-  NULL,
-  NULL,
-  NULL,
-  NULL,
-
-  // py_proc_t
-  "Failed to initialise process",
-  "Failed to fork process",
-  "Failed to load memory maps",
-  "Interpreter state search timed out",
-  "Failed to attach to running process",
-  "Permission denied. Try with elevated privileges",
-  "No such process",
-  "Non-Python parent process has no Python children",
+const error_info_t _error_info_tab[MAXERROR] = {
+    {"No error",                false}, /* OK */
+    {"Operating system error",  true }, /* OS */
+    {"Permission error",        true }, /* PERM */
+    {"Memory copy error",       true }, /* MEMCOPY */
+    {"Memory allocation error", true }, /* MALLOC */
+    {"I/O error",               true }, /* IO */
+    {"Command line error",      true }, /* CMDLINE */
+    {"Environment error",       true }, /* ENV */
+    {"Value error",             false}, /* VALUE */
+    {"Null pointer error",      true }, /* NULL */
+    {"Python version error",    true }, /* VERSION */
+    {"Binary analysis error",   false}, /* BINARY */
+    {"Python object error",     false}, /* PYOBJECT */
+    {"VM maps error",           false}, /* VM */
+    {"Iteration ended error",   false}, /* ITEREND */
 };
 
-
-const int _fatal_error_tab[MAXERROR] = {
-  // generic error messages
-  0,
-  1,
-  1,
-  1,
-  0,
-  1,
-  0,
-  0,
-
-  // PyCodeObject
-  0,
-  0,
-  0,
-  0,
-  0,
-  0,
-  0,
-  0,
-
-  // PyFrameObject
-  0,
-  0,
-  0,
-  0,
-  0,
-  0,
-  0,
-  0,
-
-  // py_thread_t
-  0,
-  0,
-  0,
-  0,
-  0,
-  0,
-  0,
-  0,
-
-  // py_proc_t
-  0,
-  1,
-  1,
-  1,
-  1,
-  1,
-  1,
-  1,
-};
-
-
-const char *
+const char*
 error_get_msg(error_t n) {
-  if (n >= MAXERROR)
-    return "<Unknown error>";
-
-  return _error_msg_tab[n];
+    return n < MAXERROR ? _error_info_tab[n].msg : "<Unknown error>";
 }
 
-
-const int
+const bool
 is_fatal(error_t n) {
-  if (n >= MAXERROR)
-    return FALSE;
-
-  return _fatal_error_tab[n];
+    return n < MAXERROR ? _error_info_tab[n].fatal : false;
 }

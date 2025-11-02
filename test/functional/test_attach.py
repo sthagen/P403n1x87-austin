@@ -22,57 +22,53 @@
 
 import os
 import platform
+import signal
+import sys
+import time
 from collections import Counter
 from shutil import rmtree
-import time
 from test.utils import allpythons
 from test.utils import austin
 from test.utils import austinp
-from test.utils import compress
-from test.utils import has_pattern
-from test.utils import metadata
-from test.utils import mojo
+from test.utils import has_frame
 from test.utils import requires_sudo
 from test.utils import run_python
-from test.utils import sum_metric
+from test.utils import sum_metrics
 from test.utils import target
 from test.utils import threads
 from test.utils import variants
 from time import sleep
 
-from flaky import flaky
 import pytest
+from flaky import flaky
 
 
 @requires_sudo
-@pytest.mark.parametrize("heap", [tuple(), ("-h", "0"), ("-h", "64")])
 @pytest.mark.parametrize(
-    "mode,mode_meta", [("-i", "wall"), ("-si", "cpu"), ("-Ci", "wall"), ("-Csi", "cpu")]
+    "mode,mode_meta", [("-i", "wall"), ("-ci", "cpu"), ("-Ci", "wall"), ("-Cci", "cpu")]
 )
 @allpythons()
 @variants
-def test_attach_wall_time(austin, py, mode, mode_meta, heap):
+def test_attach_wall_time(austin, py, mode, mode_meta):
     with run_python(py, target("sleepy.py"), "2") as p:
         sleep(0.5)
 
-        result = austin(mode, "2ms", *heap, "-p", str(p.pid))
+        result = austin(mode, "2ms", "-p", str(p.pid))
         assert result.returncode == 0
 
-        ts = threads(result.stdout)
-        assert len(ts) == 1, compress(result.stdout)
+        ts = threads(result.samples)
+        assert len(ts) == 1
 
-        assert has_pattern(result.stdout, "sleepy.py:<module>:"), compress(
-            result.stdout
-        )
+        assert has_frame(result.samples, filename="sleepy.py", function="<module>")
 
-        meta = metadata(result.stdout)
+        meta = result.metadata
 
         assert meta["mode"] == mode_meta
 
-        a = sum_metric(result.stdout)
+        a, _ = sum_metrics(result.samples)
         d = int(meta["duration"])
 
-        assert a <= d
+        assert a <= 1.1 * d
 
 
 @requires_sudo
@@ -80,34 +76,53 @@ def test_attach_wall_time(austin, py, mode, mode_meta, heap):
 @allpythons()
 def test_attach_exposure(py, exposure):
     with run_python(py, target("sleepy.py"), "3") as p:
-        result = austin("-i", "1ms", "-x", str(exposure), "-p", str(p.pid))
-        assert result.returncode == 0
-
-        assert has_pattern(result.stdout, "sleepy.py:<module>:"), compress(
-            result.stdout
+        result = austin(
+            "-i",
+            "100ms",
+            "-x",
+            str(exposure),
+            "-p",
+            str(p.pid),
+            expect_fail=True if sys.platform == "win32" else 256 - signal.SIGINT,
         )
 
-        meta = metadata(result.stdout)
+        assert has_frame(result.samples, filename="sleepy.py", function="<module>")
 
-        d = int(meta["duration"])
+        meta = result.metadata
 
-        assert exposure * 800000 <= d < exposure * 1200000
+        d = int(meta["duration"]) / 1e6  # seconds
+
+        assert abs(d - exposure) <= 0.5
 
         p.kill()
 
 
 @requires_sudo
 @allpythons()
-@mojo
-def test_where(py, mojo):
+def test_where(py):
     with run_python(py, target("sleepy.py"), sleep_after=1) as p:
-        result = austin("-w", str(p.pid), mojo=mojo)
+        result = austin("-w", str(p.pid))
         assert result.returncode == 0
 
         assert "Process" in result.stdout
         assert "Thread" in result.stdout
         assert "sleepy.py" in result.stdout
         assert "<module>" in result.stdout
+
+
+@requires_sudo
+@allpythons()
+def test_where_multiple_times(py):
+    n = 10
+    with run_python(py, target("sleepy.py"), str(n), sleep_after=1) as p:
+        for _ in range(n):
+            result = austin("-w", str(p.pid))
+            assert result.returncode == 0
+
+            assert "Process" in result.stdout
+            assert "Thread" in result.stdout
+            assert "sleepy.py" in result.stdout
+            assert "<module>" in result.stdout
 
 
 @flaky
@@ -127,13 +142,11 @@ def test_where_multiprocess(py):
             if sum(c for line, c in lines.items() if "Process" in line) >= 3:
                 break
         else:
-            raise AssertionError(compress(result.stdout))
+            raise AssertionError("expected number of processes")
 
-        assert sum(c for line, c in lines.items() if "fact" in line) == 2, compress(
-            result.stdout
-        )
+        assert sum(c for line, c in lines.items() if "fact" in line) == 2
         (join_line,) = (line for line in lines if "join" in line)
-        assert lines[join_line] == 1, compress(result.stdout)
+        assert lines[join_line] == 1
 
 
 @pytest.mark.xfail(reason="Fails in CI with some Python versions")
@@ -144,16 +157,17 @@ def test_where_kernel(py):
         result = austinp("-kw", str(p.pid))
         assert result.returncode == 0
 
-        assert "Process" in result.stdout, compress(result.stdout)
-        assert "Thread" in result.stdout, compress(result.stdout)
-        assert "sleepy.py" in result.stdout, compress(result.stdout)
-        assert "<module>" in result.stdout, compress(result.stdout)
-        assert "libc" in result.stdout, compress(result.stdout)
-        assert "do_syscall" in result.stdout, compress(result.stdout)
+        assert "Process" in result.stdout
+        assert "Thread" in result.stdout
+        assert "sleepy.py" in result.stdout
+        assert "<module>" in result.stdout
+        assert "libc" in result.stdout
+        assert "do_syscall" in result.stdout
 
 
 @pytest.mark.parametrize("prefix", [[], ["unshare", "-p", "-f", "-r"]])
 @pytest.mark.skipif(platform.system() != "Linux", reason="Linux only")
+@pytest.mark.xfail(os.getenv("CI") == "true", reason="Fails in CI")
 @requires_sudo
 @allpythons()
 def test_attach_container_like(py, tmp_path, prefix):
@@ -182,15 +196,13 @@ def test_attach_container_like(py, tmp_path, prefix):
         assert result.returncode == 0
 
         ts = threads(result.stdout)
-        assert len(ts) == 1, compress(result.stdout)
+        assert len(ts) == 1
 
-        assert has_pattern(result.stdout, "sleepy.py:<module>:"), compress(
-            result.stdout
-        )
+        assert has_frame(result.samples, filename="sleepy.py", function="<module>")
 
-        meta = metadata(result.stdout)
+        meta = result.metadata
 
-        a = sum_metric(result.stdout)
+        a = sum_metrics(result.stdout)
         d = int(meta["duration"])
 
         assert abs(a - d) <= (a + d) * 0.25

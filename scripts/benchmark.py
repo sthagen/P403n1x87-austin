@@ -8,19 +8,20 @@ import typing as t
 from argparse import ArgumentParser
 from math import floor, log
 from pathlib import Path
-from test.utils import metadata, target
 from textwrap import wrap
 
 from common import download_release
 from scipy.stats import ttest_ind
 
-VERSIONS = ("3.5.0", "3.6.0", "dev")
+from test.utils import target
+
+VERSIONS = ("base", "dev")
 SCENARIOS = [
     *[
         (
             "austin",
             f"Wall time [sampling interval: {i}]",
-            ["-Pi", str(i), sys.executable, target("target34.py")],
+            ["-i", str(i), sys.executable, target("target34.py")],
         )
         for i in (1, 10, 100, 1000)
     ],
@@ -28,7 +29,7 @@ SCENARIOS = [
         (
             "austin",
             f"CPU time [sampling interval: {i}]",
-            ["-Psi", str(i), sys.executable, target("target34.py")],
+            ["-ci", str(i), sys.executable, target("target34.py")],
         )
         for i in (1, 10, 100, 1000)
     ],
@@ -36,7 +37,7 @@ SCENARIOS = [
         (
             "austin",
             f"RSA keygen [sampling interval: {i}]",
-            ["-Psi", str(i), sys.executable, "-m", "test.bm.rsa_key_generator"],
+            ["-ci", str(i), sys.executable, "-m", "test.bm.rsa_key_generator"],
         )
         for i in (1, 10, 100, 1000)
     ],
@@ -44,7 +45,7 @@ SCENARIOS = [
         (
             "austin",
             f"Full metrics [sampling interval: {i}]",
-            ["-Pfi", str(i), sys.executable, target("target34.py")],
+            ["-fi", str(i), sys.executable, target("target34.py")],
         )
         for i in (1, 10, 100, 1000)
     ],
@@ -52,7 +53,7 @@ SCENARIOS = [
         (
             "austin",
             f"Multiprocess wall time [sampling interval: {i}]",
-            ["-CPfi", str(i), sys.executable, target("target_mp.py"), "16"],
+            ["-Cfi", str(i), sys.executable, target("target_mp.py"), "16"],
         )
         for i in (1, 10, 100, 1000)
     ],
@@ -68,9 +69,8 @@ METRICS = [
 ]
 
 
-def get_stats(output: str) -> t.Optional[dict]:
+def get_stats(meta: dict[str, str]) -> t.Optional[dict]:
     try:
-        meta = metadata(output)
         raw_saturation = meta["saturation"]
         _, _, raw_samples = raw_saturation.partition("/")
 
@@ -131,39 +131,38 @@ class Renderer(abc.ABC):
     SAME = "same"
 
     @abc.abstractmethod
-    def render_header(self, title: str, level: int = 1) -> str:
-        ...
+    def render_header(self, title: str, level: int = 1) -> None: ...
 
     @abc.abstractmethod
-    def render_paragraph(self, text: str) -> str:
-        ...
+    def render_paragraph(self, text: str) -> None: ...
 
     @abc.abstractmethod
-    def render_table(self, table) -> str:
-        ...
+    def render_table(self, table) -> None: ...
 
     @abc.abstractmethod
     def render_scenario(
         self, title, results: t.List[t.Tuple[str, t.List[Results]]]
-    ) -> str:
-        ...
+    ) -> None: ...
 
     @abc.abstractmethod
     def render_summary(
         self, summary: t.List[t.Tuple[str, t.List[t.Tuple[str, bool, int]]]]
-    ) -> str:
-        ...
+    ) -> None: ...
 
+
+class TerminalRenderer(Renderer):
     def render_scenario(
         self, title, table: t.List[t.Tuple[str, t.List[Results]]]
-    ) -> str:
+    ) -> None:
         self.render_header(title, level=2)
         self.render_table(table)
         print()
 
     def render_summary(self, summary):
         self.render_header("Benchmark Summary", level=2)
-        self.render_paragraph(f"Comparison of {VERSIONS[-1]} against {VERSIONS[-2]}.")
+        self.render_paragraph(
+            f"Comparison of **{VERSIONS[-1]}** against **{VERSIONS[-2]}**."
+        )
 
         if not summary:
             self.render_paragraph(
@@ -189,9 +188,7 @@ class Renderer(abc.ABC):
             ]
         )
 
-
-class TerminalRenderer(Renderer):
-    def render_table(self, table: t.List[t.Tuple[str, t.List[Results]]]) -> str:
+    def render_table(self, table: t.List[t.Tuple[str, t.List[Results]]]) -> None:
         _, row = table[0]
         cols = list(row.keys())
         max_vh = max(len(e[0]) for e in table)
@@ -202,43 +199,43 @@ class TerminalRenderer(Renderer):
         print("=" * div_len)
         print(
             (" " * (max_vh + 2))
-            + "".join(f"{col:^{cw+2}}" for col, cw in zip(cols, col_widths))
+            + "".join(f"{col:^{cw + 2}}" for col, cw in zip(cols, col_widths))
         )
         print("-" * div_len)
 
         for v, row in table:
-            print(f"{v:^{max_vh+2}}", end="")
+            print(f"{v:^{max_vh + 2}}", end="")
             for col, cw in zip(cols, col_widths):
-                print(f"{str(row[col]):^{cw+2}}", end="")
+                print(f"{str(row[col]):^{cw + 2}}", end="")
             print()
 
         print("=" * div_len)
 
-    def render_header(self, title: str, level: int = 1) -> str:
+    def render_header(self, title: str, level: int = 1) -> None:
         print(title)
         print({1: "=", 2: "-", 3: "~"}.get(level, "-") * len(title))
         print()
 
-    def render_paragraph(self, text: str) -> str:
+    def render_paragraph(self, text: str) -> None:
         for _ in wrap(text):
             print(_)
         print()
 
 
-class MarkdownRenderer(Renderer):
+class MarkdownRenderer(TerminalRenderer):
     BETTER = ":green_circle:"
     WORSE = ":red_circle:"
     SAME = ":yellow_circle:"
 
-    def render_header(self, title: str, level: int = 1) -> str:
+    def render_header(self, title: str, level: int = 1) -> None:
         print(f"{'#' * level} {title}")
         print()
 
-    def render_paragraph(self, text: str) -> str:
+    def render_paragraph(self, text: str) -> None:
         print(text)
         print()
 
-    def render_table(self, table: t.List[t.Tuple[str, t.List[Results]]]) -> str:
+    def render_table(self, table: t.List[t.Tuple[str, t.List[Results]]]) -> None:
         _, row = table[0]
         cols = list(row.keys())
         max_vh = max(len(e[0]) for e in table)
@@ -260,7 +257,7 @@ class MarkdownRenderer(Renderer):
 
     def render_scenario(
         self, title, table: t.List[t.Tuple[str, t.List[Results]]]
-    ) -> str:
+    ) -> None:
         print("<details>")
         print(f"<summary><strong>{title}</strong></summary>")
         print()
@@ -284,6 +281,72 @@ def summarize(results: t.List[t.Tuple[str, t.List[Results]]]):
         if any(c for _, c, _ in tests):
             summary.append((title, tests))
     return summary
+
+
+def benchmark(opts: ArgumentParser) -> None:
+    Outcome.__critical_p__ = opts.pvalue
+
+    renderer = {"terminal": TerminalRenderer, "markdown": MarkdownRenderer}[
+        opts.format
+    ]()
+
+    renderer.render_header("Austin Benchmarks")
+    renderer.render_paragraph(
+        f"Running Austin benchmarks with Python {'.'.join(str(_) for _ in sys.version_info[:3])}",
+    )
+
+    results: t.List[t.Tuple[str, t.List[Results]]] = []
+
+    for variant, title, args in SCENARIOS:
+        if opts.k is not None and not opts.k.match(title):
+            continue
+
+        print(f"Running scenario {title} with {variant} ...", file=sys.stderr)
+
+        table: t.List[Results] = []
+        for version in VERSIONS:
+            print(f"> Running with Austin {version} ...    ", end="\r", file=sys.stderr)
+            try:
+                austin = download_release(version, Path("/tmp"), variant_name=variant)
+            except RuntimeError:
+                print(
+                    f"WARNING: Could not download {variant} {version}", file=sys.stderr
+                )
+                continue
+
+            stats = [
+                _
+                for _ in (
+                    get_stats(run.metadata)
+                    for run in (austin(*args) for _ in range(opts.n))
+                )
+                if _ is not None
+            ]
+            if not stats:
+                print(
+                    f"WARNING: No valid stats for {variant} {version} with args {args}",
+                    file=sys.stderr,
+                )
+                continue
+            table.append(
+                (
+                    version,
+                    {
+                        key: Outcome([s[key] for s in stats])
+                        for key in list(stats[0].keys())
+                    },
+                )
+            )
+
+        results.append((title, table))
+
+    summary = summarize(results)
+
+    renderer.render_summary(summary)
+
+    renderer.render_header("Benchmark Results", level=2)
+    for title, table in results:
+        renderer.render_scenario(title, table)
 
 
 def main():
@@ -312,13 +375,6 @@ def main():
     )
 
     argp.add_argument(
-        "-l",
-        "--last",
-        action="store_true",
-        help="Run only with the last release of Austin",
-    )
-
-    argp.add_argument(
         "-p",
         "--pvalue",
         type=float,
@@ -328,58 +384,7 @@ def main():
 
     opts = argp.parse_args()
 
-    Outcome.__critical_p__ = opts.pvalue
-
-    renderer = {"terminal": TerminalRenderer, "markdown": MarkdownRenderer}[
-        opts.format
-    ]()
-
-    renderer.render_header("Austin Benchmarks")
-    renderer.render_paragraph(
-        f"Running Austin benchmarks with Python {'.'.join(str(_) for _ in sys.version_info[:3])}",
-    )
-
-    results: t.List[t.Tuple[str, t.List[Results]]] = []
-
-    for variant, title, args in SCENARIOS:
-        if opts.k is not None and not opts.k.match(title):
-            continue
-
-        table: t.List[Results] = []
-        for version in VERSIONS[-2:] if opts.last else VERSIONS:
-            print(f"> Running with Austin {version} ...    ", end="\r", file=sys.stderr)
-            try:
-                austin = download_release(version, Path("/tmp"), variant_name=variant)
-            except RuntimeError:
-                print(
-                    f"WARNING: Could not download {variant} {version}", file=sys.stderr
-                )
-                continue
-
-            stats = [
-                _
-                for _ in (get_stats(austin(*args).stdout) for _ in range(opts.n))
-                if _ is not None
-            ]
-            table.append(
-                (
-                    version,
-                    {
-                        key: Outcome([s[key] for s in stats])
-                        for key in list(stats[0].keys())
-                    },
-                )
-            )
-
-        results.append((title, table))
-
-    summary = summarize(results)
-
-    renderer.render_summary(summary)
-
-    renderer.render_header("Benchmark Results", level=2)
-    for title, table in results:
-        renderer.render_scenario(title, table)
+    benchmark(opts)
 
 
 if __name__ == "__main__":

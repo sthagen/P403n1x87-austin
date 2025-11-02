@@ -20,9 +20,10 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-#ifndef EVENTS_H
-#define EVENTS_H
+#pragma once
 
+#include <stdarg.h>
+#include <stdbool.h>
 #include <stdio.h>
 
 #include "argparse.h"
@@ -30,6 +31,7 @@
 #include "logging.h"
 #include "mojo.h"
 #include "platform.h"
+#include "py_string.h"
 
 #if defined PL_WIN
 #define fprintfp _fprintf_p
@@ -39,117 +41,128 @@
 
 #if defined PL_WIN
 #define MEM_METRIC "%lld"
-#elif defined __arm__
-#define MEM_METRIC "%d"
 #else
-#define MEM_METRIC "%ld"
+#define MEM_METRIC "%zd"
 #endif
-#define TIME_METRIC "%lu"
+#define TIME_METRIC MICROSECONDS_FMT
 #define IDLE_METRIC "%d"
-#define METRIC_SEP ","
+#define METRIC_SEP  ","
 
-#define emit_metadata(label, ...)        \
-  {                                      \
-    if (pargs.binary) {                  \
-      mojo_metadata(label, __VA_ARGS__); \
-    } else {                             \
-      meta(label, __VA_ARGS__);          \
-    }                                    \
-  }
+typedef enum {
+    GC_STATE_INACTIVE,
+    GC_STATE_COLLECTING,
+    GC_STATE_UNKNOWN,
+} gc_state_t;
 
-#define emit_invalid_frame()                    \
-  {                                             \
-    if (pargs.binary) {                         \
-      mojo_event(MOJO_FRAME_INVALID);           \
-    } else {                                    \
-      fprintf(pargs.output_file, ";:INVALID:"); \
-    }                                           \
-  }
+typedef struct {
+    pid_t          pid;      // Process ID
+    int64_t        iid;      // Interpreter ID
+    uintptr_t      tid;      // Thread ID
+    microseconds_t time;     // Time of the sample
+    ssize_t        memory;   // Memory usage
+    gc_state_t     gc_state; // GC state
+    bool           is_idle;  // Is the thread idle?
+} sample_t;
 
-#define emit_gc()                          \
-  {                                        \
-    if (pargs.binary) {                    \
-      mojo_event(MOJO_GC);                 \
-    } else {                               \
-      fprintf(pargs.output_file, ";:GC:"); \
-    }                                      \
-  }
+struct _eh;
 
-#define emit_stack(format, pid, iid, tid, ...)                         \
-  {                                                                    \
-    if (pargs.binary) {                                                \
-      mojo_stack(pid, iid, tid);                                       \
-    } else {                                                           \
-      fprintfp(pargs.output_file, format, pid, iid, tid, __VA_ARGS__); \
-    }                                                                  \
-  }
+typedef void (*event_handler_metadata_t)(struct _eh*, char* key, char* value, va_list args);
+typedef void (*event_handler_stack_begin_t)(struct _eh*, sample_t* sample);
+typedef void (*event_handler_new_string_t)(struct _eh*, cached_string_t* string);
+typedef void (*event_handler_new_frame_t)(struct _eh*, void* frame);
+typedef void (*event_handler_stack_end_t)(struct _eh*);
 
-#define emit_frame_ref(format, frame)                                      \
-  {                                                                        \
-    if (pargs.binary) {                                                    \
-      mojo_frame_ref(frame);                                               \
-    } else {                                                               \
-      fprintfp(pargs.output_file, format, frame->filename,                 \
-               frame->scope == UNKNOWN_SCOPE ? "<unknown>" : frame->scope, \
-               frame->line);                                               \
-    }                                                                      \
-  }
+typedef struct _ehs {
+    event_handler_metadata_t    emit_metadata;
+    event_handler_stack_begin_t emit_stack_begin;
+    event_handler_new_string_t  emit_new_string;
+    event_handler_new_frame_t   emit_new_frame;
+    event_handler_stack_end_t   emit_stack_end;
+} event_handler_spec_t;
 
-#define emit_time_metric(value)                                \
-  {                                                            \
-    if (pargs.binary) {                                        \
-      mojo_metric_time(value);                                 \
-    } else {                                                   \
-      fprintf(pargs.output_file, " " TIME_METRIC "\n", value); \
-    }                                                          \
-  }
+typedef struct _eh {
+    event_handler_spec_t spec; // Pointer to the event handler
+    // custom event handler data
+} event_handler_t;
 
-#define emit_memory_metric(value)                             \
-  {                                                           \
-    if (pargs.binary) {                                       \
-      mojo_metric_memory(value);                              \
-    } else {                                                  \
-      fprintf(pargs.output_file, " " MEM_METRIC "\n", value); \
-    }                                                         \
-  }
+#ifndef EVENTS_C
+extern
+#endif
+    event_handler_t* event_handler; // Global event handler
 
-#define emit_full_metrics(time, idle, memory)                                          \
-  {                                                                                    \
-    if (pargs.binary) {                                                                \
-      mojo_metric_time(time);                                                          \
-      if (idle) {                                                                      \
-        mojo_event(MOJO_IDLE);                                                         \
-      }                                                                                \
-      mojo_metric_memory(memory);                                                      \
-    } else {                                                                           \
-      fprintf(pargs.output_file,                                                       \
-              " " TIME_METRIC METRIC_SEP IDLE_METRIC METRIC_SEP MEM_METRIC "\n", time, \
-              idle, memory);                                                           \
-    }                                                                                  \
-  }
+static inline void
+event_handler__emit_stack_begin(sample_t* sample) {
+    if (!isvalid(event_handler)) // GCOV_EXCL_LINE
+        return;                  // GCOV_EXCL_LINE
 
-#ifdef NATIVE
+    event_handler_stack_begin_t handler = event_handler->spec.emit_stack_begin;
+    if (isvalid(handler))
+        handler(event_handler, sample);
+}
 
-#define emit_kernel_frame(format, scope)          \
-  {                                               \
-    if (pargs.binary) {                           \
-      mojo_frame_kernel(scope);                   \
-    } else {                                      \
-      fprintfp(pargs.output_file, format, scope); \
-    }                                             \
-  }
+static inline void
+event_handler__emit_metadata(char* key, char* fmt, ...) {
+    if (!isvalid(event_handler)) // GCOV_EXCL_LINE
+        return;                  // GCOV_EXCL_LINE
 
-#endif  // NATIVE
+    va_list args;
+    va_start(args, fmt);
 
-#ifdef DEBUG
+    event_handler_metadata_t handler = event_handler->spec.emit_metadata;
+    if (isvalid(handler))
+        handler(event_handler, key, fmt, args);
 
-#define emit_frames_left(n)                                \
-  {                                                        \
-    if (!pargs.binary) {                                   \
-      fprintf(pargs.output_file, ";:%ld FRAMES LEFT:", n); \
-    }                                                      \
-  }
+    va_end(args);
+}
 
-#endif  // DEBUG
+static inline void
+event_handler__emit_new_string(cached_string_t* cached_string) {
+    if (!isvalid(event_handler)) // GCOV_EXCL_LINE
+        return;                  // GCOV_EXCL_LINE
 
-#endif  // EVENTS_H
+    event_handler_new_string_t handler = event_handler->spec.emit_new_string;
+    if (isvalid(handler))
+        handler(event_handler, cached_string);
+}
+
+static inline void
+event_handler__emit_new_frame(void* frame) {
+    if (!isvalid(event_handler)) // GCOV_EXCL_LINE
+        return;                  // GCOV_EXCL_LINE
+
+    event_handler_new_frame_t handler = event_handler->spec.emit_new_frame;
+    if (isvalid(handler))
+        handler(event_handler, frame);
+}
+
+static inline void
+event_handler__emit_stack_end(void) {
+    if (!isvalid(event_handler)) // GCOV_EXCL_LINE
+        return;                  // GCOV_EXCL_LINE
+
+    event_handler_stack_end_t handler = event_handler->spec.emit_stack_end;
+    if (isvalid(handler))
+        handler(event_handler);
+}
+
+static inline void
+event_handler_install(event_handler_t* handler) {
+    if (isvalid(event_handler)) // GCOV_EXCL_LINE
+        free(event_handler);    // GCOV_EXCL_LINE
+
+    event_handler = handler;
+}
+
+static inline void
+event_handler_free(void) {
+    if (isvalid(event_handler)) {
+        free(event_handler);
+        event_handler = NULL;
+    }
+}
+
+event_handler_t*
+mojo_event_handler_new(void);
+
+event_handler_t*
+where_event_handler_new(void);

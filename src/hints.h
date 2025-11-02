@@ -20,29 +20,71 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-#ifndef HINTS_H
-#define HINTS_H
+#pragma once
 
-#define SUCCESS                         return 0
-#define FAIL                            return 1
+#include "error.h"
 
-#define TRUE                           1
-#define FALSE                          0
+#define SUCCESS return 0
+#define FAIL            \
+    {                   \
+        log_location(); \
+        return 1;       \
+    }
+#define STOP(x)                     \
+    {                               \
+        austin_errno = AUSTIN_E##x; \
+        return 1;                   \
+    }
+#define FAIL_PTR        \
+    {                   \
+        log_location(); \
+        return NULL;    \
+    }
 
-#define success(x)                      (!(x))
-#define fail(x)                         (x)
-#define sfree(x)                        {if ((x) != NULL) {free(x); x = NULL;}}
+#define FAIL_INT        \
+    {                   \
+        log_location(); \
+        return -1;      \
+    }
 
-#define isvalid(x)                      ((x) != NULL)
+#define FAIL_BOOL       \
+    {                   \
+        log_location(); \
+        return -1;      \
+    }
+
+#define FAIL_BREAK      \
+    {                   \
+        log_location(); \
+        break;          \
+    }
+#define FAIL_GOTO(x)    \
+    {                   \
+        log_location(); \
+        goto x;         \
+    }
+#define FAIL_VOID       \
+    {                   \
+        log_location(); \
+        return;         \
+    }
+
+#define success(x) (!(x))
+#define fail(x)    (x)
+#define sfree(x)           \
+    {                      \
+        if ((x) != NULL) { \
+            free(x);       \
+            x = NULL;      \
+        }                  \
+    }
+
+#define isvalid(x) ((x) != NULL)
 
 #ifndef likely
-#define likely(x)                       __builtin_expect(!!(x), 1)
+#define likely(x) __builtin_expect(!!(x), 1)
 #endif
 
 #ifndef unlikely
-#define unlikely(x)                     __builtin_expect(!!(x), 0)
-#endif
-
-#define UNKNOWN_SCOPE                   ((char *) 1)
-
+#define unlikely(x) __builtin_expect(!!(x), 0)
 #endif
